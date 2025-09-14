@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  frappe-books:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: frappe-books
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      # Mount data directory for persistent storage
+      - frappe-books-data:/app/data
+      # Mount logs directory
+      - frappe-books-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - ELECTRON_DISABLE_SECURITY_WARNINGS=true
+      - PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+      - PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+    networks:
+      - frappe-books-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "console.log('Health check passed')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Development service
+  frappe-books-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: frappe-books-dev
+    restart: unless-stopped
+    ports:
+      - "6969:6969"  # Vite dev server
+      - "5858:5858"  # Electron debug port
+    volumes:
+      # Mount source code for hot reloading
+      - .:/app
+      - /app/node_modules
+      - frappe-books-data:/app/data
+    environment:
+      - NODE_ENV=development
+      - ELECTRON_DISABLE_SECURITY_WARNINGS=true
+      - VITE_HOST=0.0.0.0
+      - VITE_PORT=6969
+    networks:
+      - frappe-books-network
+    profiles:
+      - dev
+
+  # Database service (if using external database)
+  postgres:
+    image: postgres:15-alpine
+    container_name: frappe-books-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=frappe_books
+      - POSTGRES_USER=frappe
+      - POSTGRES_PASSWORD=frappe_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - frappe-books-network
+    profiles:
+      - database
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: frappe-books-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - frappe-books-network
+    profiles:
+      - cache
+
+volumes:
+  frappe-books-data:
+    driver: local
+  frappe-books-logs:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+
+networks:
+  frappe-books-network:
+    driver: bridge
